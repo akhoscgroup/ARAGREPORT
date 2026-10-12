@@ -539,6 +539,21 @@
         }
     }
 
+    // แปลงจำนวนเงินจาก Excel ให้เป็นตัวเลขจริงเสมอ
+    // รองรับ "1,234.56", " 1 234.56 ", "1,234.56-" (ลบแบบ SAP), "(1,234.56)" และตัวเลขปกติ
+    function parseAmount(val) {
+        if (val === null || val === undefined || val === '') return 0;
+        if (typeof val === 'number') return isNaN(val) ? 0 : val;
+        let s = String(val).trim();
+        let negative = false;
+        if (/^\(.*\)$/.test(s)) { negative = true; s = s.slice(1, -1); }
+        if (s.endsWith('-')) { negative = true; s = s.slice(0, -1); }
+        s = s.replace(/[^0-9.\-]/g, '');
+        let n = parseFloat(s);
+        if (isNaN(n)) return 0;
+        return negative ? -Math.abs(n) : n;
+    }
+
     function formatNumber(num) {
         if (num === null || num === undefined || num === '') return '';
         const parsed = parseFloat(num);
@@ -801,8 +816,8 @@
                 ageDateDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
             }
 
-            const amountCoCode = parseFloat(getRowValue(row, ["Amount (CoCode Crcy)", "Amount (CoCode)", "Amount CoCode", "Total Bal."]) || 0);
-            const amountTran = parseFloat(getRowValue(row, ["Amount (Tran Cur.)", "Amount (Tran)", "Amount Tran"]) || 0);
+            const amountCoCode = parseAmount(getRowValue(row, ["Amount (CoCode Crcy)", "Amount (CoCode)", "Amount CoCode", "Total Bal."]));
+            const amountTran = parseAmount(getRowValue(row, ["Amount (Tran Cur.)", "Amount (Tran)", "Amount Tran"]));
 
             let vCurrent = 0, vB1 = 0, vB2 = 0, vB3 = 0, vB4 = 0, vB5 = 0, vB6 = 0, vB7 = 0, vTotalOverdue = 0;
 
@@ -868,15 +883,15 @@
                 "Clearing Status": getRowValue(row, ["Clearing Status"]),
                 "Clearing Journal Entry": getRowValue(row, ["Clearing Journal Entry"]),
                 "Age Date": ageDateDays,
-                "Current Due": vCurrent ? vCurrent : '',
-                [buckets.b1.label]: vB1 ? vB1 : '',
-                [buckets.b2.label]: vB2 ? vB2 : '',
-                [buckets.b3.label]: vB3 ? vB3 : '',
-                [buckets.b4.label]: vB4 ? vB4 : '',
-                [buckets.b5.label]: vB5 ? vB5 : '',
-                [buckets.b6.label]: vB6 ? vB6 : '',
-                [buckets.b7.label]: vB7 ? vB7 : '',
-                "Total Overdue": vTotalOverdue ? vTotalOverdue : ''
+                "Current Due": vCurrent ? vCurrent : null,
+                [buckets.b1.label]: vB1 ? vB1 : null,
+                [buckets.b2.label]: vB2 ? vB2 : null,
+                [buckets.b3.label]: vB3 ? vB3 : null,
+                [buckets.b4.label]: vB4 ? vB4 : null,
+                [buckets.b5.label]: vB5 ? vB5 : null,
+                [buckets.b6.label]: vB6 ? vB6 : null,
+                [buckets.b7.label]: vB7 ? vB7 : null,
+                "Total Overdue": vTotalOverdue ? vTotalOverdue : null
             };
             processedExportData.push(exportRow);
 
@@ -1125,7 +1140,22 @@
 
         // 3. Tab Original
         const ws_original = workbook.addWorksheet("Original");
-        originalRawData.forEach(row => ws_original.addRow(row));
+        // คอลัมน์ที่หัวมีคำว่า "Amount" แปลงเป็นตัวเลขจริง (กันกรณี SAP ส่งออกมาเป็น Text)
+        const origHeader = originalRawData[0] || [];
+        const amountCols = origHeader
+            .map((h, i) => /amount/i.test(String(h || '')) ? i : -1)
+            .filter(i => i >= 0);
+        originalRawData.forEach((row, idx) => {
+            if (idx === 0 || !Array.isArray(row)) { ws_original.addRow(row); return; }
+            const newRow = row.slice();
+            amountCols.forEach(i => {
+                if (newRow[i] !== undefined && newRow[i] !== null && newRow[i] !== '') {
+                    newRow[i] = parseAmount(newRow[i]);
+                }
+            });
+            const added = ws_original.addRow(newRow);
+            amountCols.forEach(i => { added.getCell(i + 1).numFmt = '#,##0.00'; });
+        });
 
         // Generate and Save File
         const buffer = await workbook.xlsx.writeBuffer();
@@ -1159,6 +1189,12 @@
             cell.border = borderStyle;
         });
 
+        // หาคอลัมน์ Age Date (เป็นจำนวนวัน ไม่ต้องมีทศนิยม)
+        let ageDateCol = -1;
+        headerRow.eachCell((cell, colNumber) => {
+            if (cell.value === 'Age Date') ageDateCol = colNumber;
+        });
+
         // Rows Styling
         ws.eachRow((row, rowNumber) => {
             if (rowNumber === 1) return;
@@ -1172,7 +1208,7 @@
                 cell.font = { name: 'Calibri', size: 10 };
 
                 if (typeof cell.value === 'number') {
-                    cell.numFmt = '#,##0.00';
+                    cell.numFmt = (colNumber === ageDateCol) ? '0' : '#,##0.00';
                 }
 
                 if (isSubtotal) {
