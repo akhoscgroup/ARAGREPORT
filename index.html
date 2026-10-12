@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer AR Aging Analyzer</title>
+    <!-- SheetJS CDN for parsing input Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- ExcelJS CDN for rich styling export (Fills, Fonts, Borders) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    <!-- FileSaver CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #1e3a8a;
+            --primary-hover: #1e40af;
+            --success-color: #15803d;
+            --success-hover: #166534;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-color: #1e293b;
+            --border-color: #e2e8f0;
+            --header-bg: #1e3a8a;
+            --header-text: #ffffff;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+
+        .app-header {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            padding: 20px 24px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+        }
+
+        .app-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: 4px;
+        }
+
+        .app-subtitle {
+            font-size: 13px;
+            color: #64748b;
+        }
+
+        .config-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            padding: 24px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+        }
+
+        .step-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr 1.8fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 1200px) {
+            .step-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .step-item {
+            background: #f8fafc;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .step-label {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--primary-color);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #475569;
+        }
+
+        input[type="file"], input[type="date"], input[type="text"], input[type="number"], select {
+            padding: 9px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 13px;
+            outline: none;
+            background: #ffffff;
+            width: 100%;
+        }
+
+        input[type="file"], select {
+            cursor: pointer;
+        }
+
+        .bucket-inputs-row {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 6px;
+        }
+
+        .action-bar {
+            display: flex;
+            gap: 12px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 16px;
+        }
+
+        button {
+            padding: 11px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border: none;
+        }
+
+        button.btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+            flex: 2;
+        }
+
+        button.btn-primary:hover {
+            background-color: var(--primary-hover);
+        }
+
+        button.btn-success {
+            background-color: var(--success-color);
+            color: white;
+            flex: 1;
+        }
+
+        button.btn-success:hover {
+            background-color: var(--success-hover);
+        }
+
+        button:disabled {
+            background-color: #cbd5e1 !important;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .summary-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-top: 4px solid var(--primary-color);
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .summary-card .title {
+            font-size: 10px;
+            color: #64748b;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .summary-card .value {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-top: 4px;
+        }
+
+        /* --- Dual Screen Selector --- */
+        .screen-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .tab-btn {
+            padding: 10px 20px;
+            border: none;
+            background-color: #e2e8f0;
+            color: #475569;
+            font-weight: 700;
+            border-radius: 6px 6px 0 0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn:hover {
+            background-color: #cbd5e1;
+        }
+
+        .tab-btn.active {
+            background-color: var(--primary-color);
+            color: #ffffff;
+            border-bottom: 3px solid #3b82f6;
+        }
+
+        .table-card {
+            background: var(--card-bg);
+            border-radius: 0 12px 12px 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            padding: 20px;
+            border: 1px solid var(--border-color);
+        }
+
+        .table-container {
+            overflow: auto;
+            max-height: 600px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        th {
+            background-color: var(--header-bg);
+            color: var(--header-text);
+            padding: 10px 8px;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 8px;
+            border-bottom: 1px solid #f1f5f9;
+            border-right: 1px solid #f8fafc;
+        }
+
+        tr:nth-child(even) { background-color: #f8fafc; }
+        tr:hover { background-color: #f1f5f9; }
+
+        tr.total-row {
+            background-color: #e2e8f0;
+            font-weight: bold;
+            color: #dc2626 !important;
+            position: sticky;
+            bottom: 0;
+            z-index: 5;
+        }
+
+        /* --- SAP Fiori Pivot Table Styling --- */
+        .pivot-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .pivot-table th {
+            background-color: #1e3a8a !important;
+            color: #ffffff !important;
+            font-weight: 700;
+            padding: 12px 10px;
+            border: 1px solid #1e40af;
+        }
+
+        .pivot-table td {
+            padding: 10px 12px;
+            border: 1px solid #cbd5e1;
+        }
+
+        .pivot-subtotal-row {
+            background-color: #dbeafe !important;
+            font-weight: 700;
+            color: #dc2626 !important;
+            border-top: 2px solid #3b82f6 !important;
+            border-bottom: 2px solid #3b82f6 !important;
+        }
+
+        .pivot-grandtotal-row {
+            background-color: #1e293b !important;
+            color: #dc2626 !important;
+            font-weight: 800;
+            font-size: 13px;
+        }
+
+        .pivot-grandtotal-row td {
+            border-color: #475569 !important;
+        }
+
+        .text-center { text-align: center; }
+        .text-left { text-align: left; }
+        .text-right { text-align: right; }
+
+        .group-checks {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 8px 12px;
+        }
+
+        .check-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-color);
+            cursor: pointer;
+        }
+
+        .check-item input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary-color); }
+
+        .check-all {
+            font-weight: 700;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 6px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #94a3b8;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="app-header">
+        <div class="app-title">Accounts Receivable Aging Analyzer</div>
+        <div class="app-subtitle">นำข้อมูลจาก Manage Customer Lineitem เลือก Layout FIN_AR แล้ว Export Enjoy your work so that other may enjoy the results.</div>
+    </div>
+
+    <div class="config-card">
+        <div class="step-grid">
+            <!-- Step 1: Upload File -->
+            <div class="step-item">
+                <div class="step-label">Step 1: เลือกไฟล์ Excel และกลุ่มลูกหนี้</div>
+                <div class="form-group">
+                    <input type="file" id="excelFile" accept=".xlsx, .xls">
+                </div>
+                <div class="form-group" style="margin-top: 10px;">
+                    <label>กลุ่มลูกหนี้</label>
+                    <div class="group-checks">
+                        <label class="check-item check-all"><input type="checkbox" id="grpAll" checked onchange="onGroupAllChange()"> ALL (ทั้งหมด)</label>
+                        <label class="check-item"><input type="checkbox" class="grp-cb" value="ลูกหนี้ในเครือ" checked onchange="onGroupItemChange()"> ลูกหนี้ในเครือ (รหัสขึ้นต้น 3)</label>
+                        <label class="check-item"><input type="checkbox" class="grp-cb" value="ลูกหนี้พนักงาน" checked onchange="onGroupItemChange()"> ลูกหนี้พนักงาน (รหัสขึ้นต้น 14)</label>
+                        <label class="check-item"><input type="checkbox" class="grp-cb" value="ลูกหนี้การค้า" checked onchange="onGroupItemChange()"> ลูกหนี้การค้า (อื่นๆ)</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Date Calculation Config -->
+            <div class="step-item">
+                <div class="step-label">Step 2: ตั้งค่าการคำนวณ Due Date</div>
+                <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 8px;">
+                    <div class="form-group">
+                        <label for="baseDateType">Base Date สำหรับคำนวณ Due</label>
+                        <select id="baseDateType">
+                            <option value="Posting Date">Posting Date</option>
+                            <option value="Journal Entry Date">Document Date</option>
+                            <option value="Baseline Date">Baseline Date</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="keyDate">Key Date (วันประมวลผล)</label>
+                        <input type="text" id="keyDate" placeholder="DD.MM.YYYY">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Overdue Intervals -->
+            <div class="step-item">
+                <div class="step-label">Step 3: กำหนดช่วงวัน Overdue (7 ช่วง)</div>
+                <div class="bucket-inputs-row">
+                    <div class="form-group"><label>Block1</label><input type="number" id="b1_max" value="30"></div>
+                    <div class="form-group"><label>Block2</label><input type="number" id="b2_max" value="45"></div>
+                    <div class="form-group"><label>Block3</label><input type="number" id="b3_max" value="60"></div>
+                    <div class="form-group"><label>Block4</label><input type="number" id="b4_max" value="90"></div>
+                    <div class="form-group"><label>Block5</label><input type="number" id="b5_max" value="180"></div>
+                    <div class="form-group"><label>Block6</label><input type="number" id="b6_max" value="365"></div>
+                    <div class="form-group"><label>Block7</label><input type="text" value="366+" disabled style="background:#e2e8f0; text-align:center;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="action-bar">
+            <button class="btn-primary" onclick="processExcel()">
+                ► คำนวณ Aging Report
+            </button>
+            <button class="btn-success" id="btnExport" onclick="exportToExcel()" disabled>
+                ดาวน์โหลดไฟล์ Excel
+            </button>
+        </div>
+    </div>
+
+    <!-- Summary Dashboard Cards -->
+    <div class="summary-cards" id="summaryCards" style="display: none;">
+        <div class="summary-card">
+            <div class="title">Total Bal.</div>
+            <div class="value" id="sumTotal">0.00</div>
+        </div>
+        <div class="summary-card">
+            <div class="title">Current Due</div>
+            <div class="value" id="sumCurrent">0.00</div>
+        </div>
+        <div class="summary-card">
+            <div class="title" id="lbl_sumB1">Over 1 - 30 Day</div>
+            <div class="value" id="sumB1">0.00</div>
+        </div>
+        <div class="summary-card">
+            <div class="title" id="lbl_sumB2">Over 31 - 45 Day</div>
+            <div class="value" id="sumB2">0.00</div>
+        </div>
+        <div class="summary-card">
+            <div class="title" id="lbl_sumB3">Over 46- 60 Day</div>
+            <div class="value" id="sumB3">0.00</div>
+        </div>
+        <div class="summary-card">
+            <div class="title" id="lbl_sumB4">Over 61 - 90 Day</div>
+            <div class="value" id="sumB4">0.00</div>
+        </div>
+        <div class="summary-card">
+            <div class="title" id="lbl_sumB5">Over 91- 180 Day</div>
+            <div class="value" id="sumB5">0.00</div>
+        </div>
+        <div class="summary-card">
+            <div class="title" id="lbl_sumB6">Over 181 - 365 Day</div>
+            <div class="value" id="sumB6">0.00</div>
+        </div>
+        <div class="summary-card">
+            <div class="title" id="lbl_sumB7">Over 365 Day</div>
+            <div class="value" id="sumB7">0.00</div>
+        </div>
+        <div class="summary-card" style="border-top-color: #dc2626;">
+            <div class="title">Total Overdue</div>
+            <div class="value" id="sumTotalOverdue" style="color: #dc2626;">0.00</div>
+        </div>
+    </div>
+
+    <!-- Screen Selector Tabs -->
+    <div class="screen-selector">
+        <button id="btnScreen1" class="tab-btn active" onclick="switchScreen('AR_AG')">📋 รายละเอียด AR Aging (AR_AG)</button>
+        <button id="btnScreen2" class="tab-btn" onclick="switchScreen('PIVOT')">📊 สรุป PIVOT (SAP Blue Theme)</button>
+    </div>
+
+    <!-- Result Data Table Card -->
+    <div class="table-card">
+        <!-- Screen 1: AR Aging Table -->
+        <div id="screenARAG">
+            <div id="tableContainerARAG" class="table-container">
+                <div class="empty-state">กรุณาทำตาม Step 1-3 แล้วกดปุ่ม "คำนวณ Aging Report" เพื่อแสดงข้อมูล</div>
+            </div>
+        </div>
+
+        <!-- Screen 2: Pivot Table Summary -->
+        <div id="screenPivot" style="display: none;">
+            <div id="tableContainerPivot" class="table-container">
+                <div class="empty-state">กรุณาคำนวณข้อมูลก่อนสลับหน้าจอมาดู PIVOT</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let processedExportData = [];
+    let originalRawData = [];
+    let currentBucketsConfig = {};
+
+    // ชื่อคอลัมน์ Reference Key 3 ที่อาจพบในไฟล์ Export จาก SAP
+    const REF_KEY3_ALIASES = ["Reference Key 3", "Reference key 3", "Reference Key3", "Reference key3", "REFERENCE KEY 3", "Ref. Key 3", "Ref Key 3", "Reference 3"];
+
+    // Default Key Date format DD.MM.YYYY
+    const today = new Date();
+    const defaultDateStr = formatDateStr(today);
+    document.getElementById('keyDate').value = defaultDateStr;
+
+    function switchScreen(screenType) {
+        const screenARAG = document.getElementById('screenARAG');
+        const screenPivot = document.getElementById('screenPivot');
+        const btn1 = document.getElementById('btnScreen1');
+        const btn2 = document.getElementById('btnScreen2');
+
+        if (screenType === 'AR_AG') {
+            screenARAG.style.display = 'block';
+            screenPivot.style.display = 'none';
+            btn1.classList.add('active');
+            btn2.classList.remove('active');
+        } else {
+            screenARAG.style.display = 'none';
+            screenPivot.style.display = 'block';
+            btn1.classList.remove('active');
+            btn2.classList.add('active');
+        }
+    }
+
+    function formatNumber(num) {
+        if (num === null || num === undefined || num === '') return '';
+        const parsed = parseFloat(num);
+        if (isNaN(parsed)) return '';
+        return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(parsed);
+    }
+
+    function parseDate(excelDate) {
+        if (!excelDate) return null;
+        if (excelDate instanceof Date) return excelDate;
+        if (typeof excelDate === 'number') {
+            return new Date(Math.round((excelDate - (25567 + 2)) * 86400 * 1000));
+        }
+        if (typeof excelDate === 'string') {
+            const partsDot = excelDate.split('.');
+            if (partsDot.length === 3) {
+                return new Date(partsDot[2], partsDot[1] - 1, partsDot[0]);
+            }
+            const partsSlash = excelDate.split('/');
+            if (partsSlash.length === 3) {
+                return new Date(partsSlash[2], partsSlash[0] - 1, partsSlash[1]);
+            }
+        }
+        return new Date(excelDate);
+    }
+
+    function formatDateStr(dateObj) {
+        if (!dateObj || isNaN(dateObj.getTime())) return '';
+        const y = dateObj.getFullYear();
+        const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const d = String(dateObj.getDate()).padStart(2, '0');
+        return `${d}.${m}.${y}`;
+    }
+
+    function parsePaymentTermsDays(termStr) {
+        if (!termStr) return 0;
+        const numbersOnly = String(termStr).replace(/[^0-9]/g, '');
+        return numbersOnly ? parseInt(numbersOnly, 10) : 0;
+    }
+
+    // จัดกลุ่มลูกหนี้จากรหัสลูกค้า (ถ้าไม่มีคอลัมน์รหัส จะดึงตัวเลขด้านหน้าของ Customer Name)
+    function getCustomerGroup(custCode, custName) {
+        let code = String(custCode || '').trim();
+        if (!code) {
+            const m = String(custName || '').trim().match(/^\d+/);
+            code = m ? m[0] : '';
+        }
+        if (code.startsWith('14')) return 'ลูกหนี้พนักงาน';
+        if (code.startsWith('3')) return 'ลูกหนี้ในเครือ';
+        return 'ลูกหนี้การค้า';
+    }
+
+    // กลุ่มที่ถูกติ๊กอยู่
+    function getSelectedGroups() {
+        return Array.from(document.querySelectorAll('.grp-cb:checked')).map(cb => cb.value);
+    }
+
+    // ติ๊ก/ยกเลิก ALL = ติ๊ก/ยกเลิกทุกกลุ่ม
+    function onGroupAllChange() {
+        const allChecked = document.getElementById('grpAll').checked;
+        document.querySelectorAll('.grp-cb').forEach(cb => cb.checked = allChecked);
+        onGroupChange();
+    }
+
+    // ติ๊กกลุ่มย่อยครบทุกกลุ่ม = ALL ติ๊กให้อัตโนมัติ
+    function onGroupItemChange() {
+        const all = document.querySelectorAll('.grp-cb');
+        const checked = document.querySelectorAll('.grp-cb:checked');
+        document.getElementById('grpAll').checked = (all.length === checked.length);
+        onGroupChange();
+    }
+
+    // เปลี่ยนกลุ่มแล้วคำนวณใหม่ทันที ถ้าเคยคำนวณไว้แล้ว
+    function onGroupChange() {
+        if (!document.getElementById('btnExport').disabled && getSelectedGroups().length > 0) {
+            processExcel(true);
+        }
+    }
+
+    function getRowValue(row, possibleNames) {
+        for (let name of possibleNames) {
+            if (row[name] !== undefined && row[name] !== "") {
+                return row[name];
+            }
+        }
+        return "";
+    }
+
+    function processExcel(silent) {
+        const fileInput = document.getElementById('excelFile');
+        const keyDateInput = document.getElementById('keyDate').value;
+        const baseDateType = document.getElementById('baseDateType').value;
+
+        if (!fileInput.files.length) {
+            alert('กรุณาเลือกไฟล์ Excel ก่อนครับ');
+            return;
+        }
+        if (getSelectedGroups().length === 0) {
+            alert('กรุณาเลือกกลุ่มลูกหนี้อย่างน้อย 1 กลุ่ม');
+            return;
+        }
+        if (!keyDateInput) {
+            alert('กรุณาระบุ Key Date สำหรับประมวลผล (รูปแบบ DD.MM.YYYY)');
+            return;
+        }
+
+        const keyDate = parseDate(keyDateInput);
+        if (!keyDate || isNaN(keyDate.getTime())) {
+            alert('รูปแบบวันที่ Key Date ไม่ถูกต้อง กรุณาระบุเป็น DD.MM.YYYY');
+            return;
+        }
+        keyDate.setHours(0, 0, 0, 0);
+
+        const b1 = parseInt(document.getElementById('b1_max').value) || 30;
+        const b2 = parseInt(document.getElementById('b2_max').value) || 45;
+        const b3 = parseInt(document.getElementById('b3_max').value) || 60;
+        const b4 = parseInt(document.getElementById('b4_max').value) || 90;
+        const b5 = parseInt(document.getElementById('b5_max').value) || 180;
+        const b6 = parseInt(document.getElementById('b6_max').value) || 365;
+
+        currentBucketsConfig = {
+            b1: { min: 1, max: b1, label: `Over 1 - ${b1} Day`, pivotLabel: `Sum of Over 1 - ${b1} Day` },
+            b2: { min: b1 + 1, max: b2, label: `Over ${b1 + 1} - ${b2} Day`, pivotLabel: `Sum of Over ${b1 + 1} - ${b2} Day` },
+            b3: { min: b2 + 1, max: b3, label: `Over ${b2 + 1}- ${b3} Day`, pivotLabel: `Sum of Over ${b2 + 1}- ${b3} Day` },
+            b4: { min: b3 + 1, max: b4, label: `Over ${b3 + 1} - ${b4} Day`, pivotLabel: `Sum of Over ${b3 + 1} - ${b4} Day` },
+            b5: { min: b4 + 1, max: b5, label: `Over ${b4 + 1}- ${b5} Day`, pivotLabel: `Sum of Over ${b4 + 1}- ${b5} Day` },
+            b6: { min: b5 + 1, max: b6, label: `Over ${b5 + 1} - ${b6} Day`, pivotLabel: `Sum of Over ${b5 + 1} - ${b6} Day` },
+            b7: { min: b6 + 1, max: Infinity, label: `Over ${b6} Day`, pivotLabel: `Sum of Over ${b6} Day` }
+        };
+
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            
+            originalRawData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+            const jsonData = XLSX.utils.sheet_to_json(firstSheet, { defval: "" });
+
+            if (jsonData.length === 0) {
+                alert('ไม่พบข้อมูลในไฟล์ Excel');
+                return;
+            }
+
+            // แจ้งเตือนถ้าไม่พบคอลัมน์ Reference Key 3 ในไฟล์
+            const headerKeys = Object.keys(jsonData[0]);
+            const hasRefKey3 = REF_KEY3_ALIASES.some(n => headerKeys.includes(n));
+            if (!hasRefKey3 && silent !== true) {
+                alert('ไม่พบคอลัมน์ "Reference Key 3" ในไฟล์\nรายการที่ Journal Entry Type = UC จะมีช่อง Invoice ว่าง\n(กรุณาเพิ่มคอลัมน์ Reference Key 3 ใน Layout ก่อน Export จาก SAP)');
+            }
+
+            // กรองตามกลุ่มลูกหนี้ที่เลือก
+            const selectedGroups = getSelectedGroups();
+            const filteredData = jsonData.filter(row => {
+                const code = getRowValue(row, ["Customer", "Customer Code"]);
+                const name = getRowValue(row, ["Customer Name", "Customer name"]);
+                return selectedGroups.includes(getCustomerGroup(code, name));
+            });
+
+            if (filteredData.length === 0) {
+                alert(`ไม่พบรายการของกลุ่ม "${selectedGroups.join(', ')}" ในไฟล์นี้`);
+            }
+
+            renderAgingTable(filteredData, keyDate, baseDateType, currentBucketsConfig);
+            renderPivotScreen(processedExportData, currentBucketsConfig);
+            document.getElementById('btnExport').disabled = false;
+        };
+
+        reader.readAsArrayBuffer(file);
+    }
+
+    function renderAgingTable(data, keyDate, baseDateType, buckets) {
+        let totals = { sumTotal: 0, sumTranTotal: 0, current: 0, b1: 0, b2: 0, b3: 0, b4: 0, b5: 0, b6: 0, b7: 0, totalOverdue: 0 };
+        processedExportData = [];
+
+        const baseDateAliases = {
+            "Posting Date": ["Posting Date", "Posting date", "POSTING DATE"],
+            "Journal Entry Date": ["Journal Entry Date", "Journal entry date", "Document Date", "Doc Date"],
+            "Baseline Date": ["Baseline Date", "Baseline date", "BASELINE DATE"]
+        };
+
+        let tableHtml = `
+            <table>
+                <thead>
+                    <tr>
+                        <th>Company Code</th>
+                        <th>Business Place</th>
+                        <th>Customer Name (Code - Name)</th>
+                        <th>Customer Group</th>
+                        <th>Branch Code</th>
+                        <th>Original Ref Doc</th>
+                        <th>Payment Ref</th>
+                        <th>Reference Key 3</th>
+                        <th style="background-color: #7c3aed; color: #fff;">Invoice</th>
+                        <th>JE Date</th>
+                        <th>Journal Entry</th>
+                        <th>Posting Date</th>
+                        <th>Baseline Date</th>
+                        <th>Payment Terms</th>
+                        <th>Net Due Date</th>
+                        <th style="background-color: #15803d; color: #fff;">Due Cal Date (${baseDateType} + Term)</th>
+                        <th>JE Type</th>
+                        <th>Total Bal.</th>
+                        <th>Amount (Tran)</th>
+                        <th>Item Text</th>
+                        <th>Tax Code</th>
+                        <th>Value Date</th>
+                        <th>Withholding Tax</th>
+                        <th>Special G/L</th>
+                        <th>Clearing Status</th>
+                        <th>Clearing JE</th>
+                        <th style="background-color: #1e40af; color: #fff;">Age Date</th>
+                        <th>Current Due</th>
+                        <th>${buckets.b1.label}</th>
+                        <th>${buckets.b2.label}</th>
+                        <th>${buckets.b3.label}</th>
+                        <th>${buckets.b4.label}</th>
+                        <th>${buckets.b5.label}</th>
+                        <th>${buckets.b6.label}</th>
+                        <th>${buckets.b7.label}</th>
+                        <th style="background-color: #991b1b; color: #fff;">Total Overdue</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        data.forEach(row => {
+            const companyCode = getRowValue(row, ["Company Code"]);
+            const custCode = getRowValue(row, ["Customer", "Customer Code"]);
+            const custName = getRowValue(row, ["Customer Name", "Customer name"]);
+            const customerCombined = (custCode && custName) ? `${custCode} - ${custName}` : (custCode || custName);
+            const customerGroup = getCustomerGroup(custCode, custName);
+
+            // --- Reference Key 3 / Invoice ---
+            const originalRefDoc = getRowValue(row, ["Original Reference Document"]);
+            const refKey3 = getRowValue(row, REF_KEY3_ALIASES);
+            const jeType = getRowValue(row, ["Journal Entry Type"]);
+            // ถ้า Journal Entry Type = UC ใช้ Reference Key 3, ไม่ใช่ใช้ Original Reference Document
+            const invoiceVal = String(jeType).trim().toUpperCase() === 'UC' ? refKey3 : originalRefDoc;
+
+            const possibleBaseNames = baseDateAliases[baseDateType] || [baseDateType];
+            const baseDateRaw = getRowValue(row, possibleBaseNames);
+            const baseDate = parseDate(baseDateRaw);
+
+            const paymentTermsVal = getRowValue(row, ["Payment Terms", "Payment terms", "PayT"]);
+            const termDays = parsePaymentTermsDays(paymentTermsVal);
+
+            let dueCalDate = null;
+            if (baseDate && !isNaN(baseDate.getTime())) {
+                dueCalDate = new Date(baseDate.getTime());
+                dueCalDate.setDate(dueCalDate.getDate() + termDays);
+            }
+
+            let ageDateDays = 0;
+            if (dueCalDate && !isNaN(dueCalDate.getTime())) {
+                dueCalDate.setHours(0, 0, 0, 0);
+                const diffTime = keyDate - dueCalDate;
+                ageDateDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            }
+
+            const amountCoCode = parseFloat(getRowValue(row, ["Amount (CoCode Crcy)", "Amount (CoCode)", "Amount CoCode", "Total Bal."]) || 0);
+            const amountTran = parseFloat(getRowValue(row, ["Amount (Tran Cur.)", "Amount (Tran)", "Amount Tran"]) || 0);
+
+            let vCurrent = 0, vB1 = 0, vB2 = 0, vB3 = 0, vB4 = 0, vB5 = 0, vB6 = 0, vB7 = 0, vTotalOverdue = 0;
+
+            if (ageDateDays <= 0) {
+                vCurrent = amountCoCode;
+                totals.current += amountCoCode;
+            } else {
+                if (ageDateDays <= buckets.b1.max) {
+                    vB1 = amountCoCode;
+                    totals.b1 += amountCoCode;
+                } else if (ageDateDays <= buckets.b2.max) {
+                    vB2 = amountCoCode;
+                    totals.b2 += amountCoCode;
+                } else if (ageDateDays <= buckets.b3.max) {
+                    vB3 = amountCoCode;
+                    totals.b3 += amountCoCode;
+                } else if (ageDateDays <= buckets.b4.max) {
+                    vB4 = amountCoCode;
+                    totals.b4 += amountCoCode;
+                } else if (ageDateDays <= buckets.b5.max) {
+                    vB5 = amountCoCode;
+                    totals.b5 += amountCoCode;
+                } else if (ageDateDays <= buckets.b6.max) {
+                    vB6 = amountCoCode;
+                    totals.b6 += amountCoCode;
+                } else {
+                    vB7 = amountCoCode;
+                    totals.b7 += amountCoCode;
+                }
+
+                vTotalOverdue = amountCoCode;
+                totals.totalOverdue += amountCoCode;
+            }
+
+            totals.sumTotal += amountCoCode;
+            totals.sumTranTotal += amountTran;
+
+            let exportRow = {
+                "Company Code": companyCode,
+                "Business Place": getRowValue(row, ["Business Place"]),
+                "Customer Name": customerCombined,
+                "Customer Group": customerGroup,
+                "Branch Code": getRowValue(row, ["Branch Code"]),
+                "Original Reference Document": originalRefDoc,
+                "Payment Reference": getRowValue(row, ["Payment Reference"]),
+                "Reference Key 3": refKey3,
+                "Invoice": invoiceVal,
+                "Journal Entry Date": formatDateStr(parseDate(getRowValue(row, ["Journal Entry Date"]))),
+                "Journal Entry": getRowValue(row, ["Journal Entry"]),
+                "Posting Date": formatDateStr(parseDate(getRowValue(row, ["Posting Date"]))),
+                "Baseline Date": formatDateStr(parseDate(getRowValue(row, ["Baseline Date"]))),
+                "Payment Terms": paymentTermsVal,
+                "Net Due Date": formatDateStr(parseDate(getRowValue(row, ["Net Due Date"]))),
+                "Due Cal Date": formatDateStr(dueCalDate),
+                "Journal Entry Type": jeType,
+                "Total Bal.": amountCoCode,
+                "Amount (Tran Cur.)": amountTran,
+                "Item Text": getRowValue(row, ["Item Text"]),
+                "Tax Code": getRowValue(row, ["Tax Code"]),
+                "Value Date": formatDateStr(parseDate(getRowValue(row, ["Value Date"]))),
+                "Withholding Tax": getRowValue(row, ["Withholding Tax"]),
+                "Special G/L": getRowValue(row, ["Special G/L"]),
+                "Clearing Status": getRowValue(row, ["Clearing Status"]),
+                "Clearing Journal Entry": getRowValue(row, ["Clearing Journal Entry"]),
+                "Age Date": ageDateDays,
+                "Current Due": vCurrent ? vCurrent : '',
+                [buckets.b1.label]: vB1 ? vB1 : '',
+                [buckets.b2.label]: vB2 ? vB2 : '',
+                [buckets.b3.label]: vB3 ? vB3 : '',
+                [buckets.b4.label]: vB4 ? vB4 : '',
+                [buckets.b5.label]: vB5 ? vB5 : '',
+                [buckets.b6.label]: vB6 ? vB6 : '',
+                [buckets.b7.label]: vB7 ? vB7 : '',
+                "Total Overdue": vTotalOverdue ? vTotalOverdue : ''
+            };
+            processedExportData.push(exportRow);
+
+            tableHtml += `
+                <tr>
+                    <td class="text-center">${companyCode}</td>
+                    <td class="text-center">${getRowValue(row, ["Business Place"])}</td>
+                    <td class="text-left">${customerCombined}</td>
+                    <td class="text-center">${customerGroup}</td>
+                    <td class="text-center">${getRowValue(row, ["Branch Code"])}</td>
+                    <td class="text-center">${originalRefDoc}</td>
+                    <td class="text-left">${getRowValue(row, ["Payment Reference"])}</td>
+                    <td class="text-center">${refKey3}</td>
+                    <td class="text-center" style="font-weight: bold; color: #7c3aed; background-color: #f5f3ff;">${invoiceVal}</td>
+                    <td class="text-center">${formatDateStr(parseDate(getRowValue(row, ["Journal Entry Date"])))}</td>
+                    <td class="text-center">${getRowValue(row, ["Journal Entry"])}</td>
+                    <td class="text-center">${formatDateStr(parseDate(getRowValue(row, ["Posting Date"])))}</td>
+                    <td class="text-center">${formatDateStr(parseDate(getRowValue(row, ["Baseline Date"])))}</td>
+                    <td class="text-center">${paymentTermsVal}</td>
+                    <td class="text-center">${formatDateStr(parseDate(getRowValue(row, ["Net Due Date"])))}</td>
+                    <td class="text-center" style="font-weight: bold; color: #15803d; background-color: #f0fdf4;">${formatDateStr(dueCalDate)}</td>
+                    <td class="text-center">${jeType}</td>
+                    <td class="text-right">${formatNumber(amountCoCode)}</td>
+                    <td class="text-right">${formatNumber(amountTran)}</td>
+                    <td class="text-left">${getRowValue(row, ["Item Text"])}</td>
+                    <td class="text-center">${getRowValue(row, ["Tax Code"])}</td>
+                    <td class="text-center">${formatDateStr(parseDate(getRowValue(row, ["Value Date"])))}</td>
+                    <td class="text-center">${getRowValue(row, ["Withholding Tax"])}</td>
+                    <td class="text-center">${getRowValue(row, ["Special G/L"])}</td>
+                    <td class="text-center">${getRowValue(row, ["Clearing Status"])}</td>
+                    <td class="text-center">${getRowValue(row, ["Clearing Journal Entry"])}</td>
+                    <td class="text-right" style="font-weight: bold; color: #1e40af;">${ageDateDays}</td>
+                    <td class="text-right">${vCurrent ? formatNumber(vCurrent) : ''}</td>
+                    <td class="text-right">${vB1 ? formatNumber(vB1) : ''}</td>
+                    <td class="text-right">${vB2 ? formatNumber(vB2) : ''}</td>
+                    <td class="text-right">${vB3 ? formatNumber(vB3) : ''}</td>
+                    <td class="text-right">${vB4 ? formatNumber(vB4) : ''}</td>
+                    <td class="text-right">${vB5 ? formatNumber(vB5) : ''}</td>
+                    <td class="text-right">${vB6 ? formatNumber(vB6) : ''}</td>
+                    <td class="text-right">${vB7 ? formatNumber(vB7) : ''}</td>
+                    <td class="text-right" style="font-weight: bold; color: #dc2626;">${vTotalOverdue ? formatNumber(vTotalOverdue) : ''}</td>
+                </tr>
+            `;
+        });
+
+        tableHtml += `
+                </tbody>
+                <tfoot>
+                    <tr class="total-row">
+                        <td colspan="17" class="text-center" style="color: #dc2626;">Total</td>
+                        <td class="text-right" style="color: #dc2626;">${formatNumber(totals.sumTotal)}</td>
+                        <td class="text-right">${formatNumber(totals.sumTranTotal)}</td>
+                        <td colspan="7"></td>
+                        <td class="text-right">-</td>
+                        <td class="text-right" style="color: #dc2626;">${formatNumber(totals.current)}</td>
+                        <td class="text-right" style="color: #dc2626;">${formatNumber(totals.b1)}</td>
+                        <td class="text-right" style="color: #dc2626;">${formatNumber(totals.b2)}</td>
+                        <td class="text-right" style="color: #dc2626;">${formatNumber(totals.b3)}</td>
+                        <td class="text-right" style="color: #dc2626;">${formatNumber(totals.b4)}</td>
+                        <td class="text-right" style="color: #dc2626;">${formatNumber(totals.b5)}</td>
+                        <td class="text-right" style="color: #dc2626;">${formatNumber(totals.b6)}</td>
+                        <td class="text-right" style="color: #dc2626;">${formatNumber(totals.b7)}</td>
+                        <td class="text-right" style="color: #dc2626; font-weight: 800;">${formatNumber(totals.totalOverdue)}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        `;
+
+        document.getElementById('tableContainerARAG').innerHTML = tableHtml;
+
+        document.getElementById('lbl_sumB1').innerText = buckets.b1.label;
+        document.getElementById('lbl_sumB2').innerText = buckets.b2.label;
+        document.getElementById('lbl_sumB3').innerText = buckets.b3.label;
+        document.getElementById('lbl_sumB4').innerText = buckets.b4.label;
+        document.getElementById('lbl_sumB5').innerText = buckets.b5.label;
+        document.getElementById('lbl_sumB6').innerText = buckets.b6.label;
+        document.getElementById('lbl_sumB7').innerText = buckets.b7.label;
+
+        document.getElementById('sumTotal').innerText = formatNumber(totals.sumTotal);
+        document.getElementById('sumCurrent').innerText = formatNumber(totals.current);
+        document.getElementById('sumB1').innerText = formatNumber(totals.b1);
+        document.getElementById('sumB2').innerText = formatNumber(totals.b2);
+        document.getElementById('sumB3').innerText = formatNumber(totals.b3);
+        document.getElementById('sumB4').innerText = formatNumber(totals.b4);
+        document.getElementById('sumB5').innerText = formatNumber(totals.b5);
+        document.getElementById('sumB6').innerText = formatNumber(totals.b6);
+        document.getElementById('sumB7').innerText = formatNumber(totals.b7);
+        document.getElementById('sumTotalOverdue').innerText = formatNumber(totals.totalOverdue);
+
+        document.getElementById('summaryCards').style.display = 'grid';
+    }
+
+    function generatePivotData(data, buckets) {
+        let pivotMap = {};
+        
+        data.forEach(item => {
+            const cc = item["Company Code"] || "Unknown";
+            const cust = item["Customer Name"] || "Unknown";
+
+            if (!pivotMap[cc]) pivotMap[cc] = {};
+            if (!pivotMap[cc][cust]) {
+                pivotMap[cc][cust] = {
+                    amount: 0, current: 0, b1: 0, b2: 0, b3: 0, b4: 0, b5: 0, b6: 0, b7: 0, totalOverdue: 0
+                };
+            }
+
+            let p = pivotMap[cc][cust];
+            p.amount += parseFloat(item["Total Bal."]) || 0;
+            p.current += parseFloat(item["Current Due"]) || 0;
+            p.b1 += parseFloat(item[buckets.b1.label]) || 0;
+            p.b2 += parseFloat(item[buckets.b2.label]) || 0;
+            p.b3 += parseFloat(item[buckets.b3.label]) || 0;
+            p.b4 += parseFloat(item[buckets.b4.label]) || 0;
+            p.b5 += parseFloat(item[buckets.b5.label]) || 0;
+            p.b6 += parseFloat(item[buckets.b6.label]) || 0;
+            p.b7 += parseFloat(item[buckets.b7.label]) || 0;
+            p.totalOverdue += parseFloat(item["Total Overdue"]) || 0;
+        });
+
+        let pivotRows = [];
+        let grandTotals = { amount: 0, current: 0, b1: 0, b2: 0, b3: 0, b4: 0, b5: 0, b6: 0, b7: 0, totalOverdue: 0 };
+
+        pivotRows.push([
+            "Company Code", "Customer Name", "Sum of Total Bal.", "Sum of Current Due",
+            buckets.b1.pivotLabel, buckets.b2.pivotLabel, buckets.b3.pivotLabel, buckets.b4.pivotLabel,
+            buckets.b5.pivotLabel, buckets.b6.pivotLabel, buckets.b7.pivotLabel, "Total Overdue"
+        ]);
+
+        for (let cc in pivotMap) {
+            let ccTotals = { amount: 0, current: 0, b1: 0, b2: 0, b3: 0, b4: 0, b5: 0, b6: 0, b7: 0, totalOverdue: 0 };
+
+            for (let cust in pivotMap[cc]) {
+                let d = pivotMap[cc][cust];
+                pivotRows.push([
+                    cc, cust, d.amount, d.current,
+                    d.b1, d.b2, d.b3, d.b4, d.b5, d.b6, d.b7, d.totalOverdue
+                ]);
+
+                ccTotals.amount += d.amount; ccTotals.current += d.current;
+                ccTotals.b1 += d.b1; ccTotals.b2 += d.b2; ccTotals.b3 += d.b3;
+                ccTotals.b4 += d.b4; ccTotals.b5 += d.b5; ccTotals.b6 += d.b6;
+                ccTotals.b7 += d.b7; ccTotals.totalOverdue += d.totalOverdue;
+            }
+
+            pivotRows.push([
+                `Total ${cc}`, "", ccTotals.amount, ccTotals.current,
+                ccTotals.b1, ccTotals.b2, ccTotals.b3, ccTotals.b4,
+                ccTotals.b5, ccTotals.b6, ccTotals.b7, ccTotals.totalOverdue
+            ]);
+
+            grandTotals.amount += ccTotals.amount; grandTotals.current += ccTotals.current;
+            grandTotals.b1 += ccTotals.b1; grandTotals.b2 += ccTotals.b2; grandTotals.b3 += ccTotals.b3;
+            grandTotals.b4 += ccTotals.b4; grandTotals.b5 += ccTotals.b5; grandTotals.b6 += ccTotals.b6;
+            grandTotals.b7 += ccTotals.b7; grandTotals.totalOverdue += ccTotals.totalOverdue;
+        }
+
+        pivotRows.push([
+            "Grand Total", "", grandTotals.amount, grandTotals.current,
+            grandTotals.b1, grandTotals.b2, grandTotals.b3, grandTotals.b4,
+            grandTotals.b5, grandTotals.b6, grandTotals.b7, grandTotals.totalOverdue
+        ]);
+
+        return pivotRows;
+    }
+
+    function renderPivotScreen(data, buckets) {
+        const pivotArray = generatePivotData(data, buckets);
+        
+        let html = `
+            <table class="pivot-table">
+                <thead>
+                    <tr>
+                        <th style="text-align: left; width: 140px;">Company Code</th>
+                        <th style="text-align: left; min-width: 250px;">Customer Name</th>
+                        <th style="text-align: right;">Sum of Total Bal.</th>
+                        <th style="text-align: right;">Sum of Current Due</th>
+                        <th style="text-align: right;">${buckets.b1.pivotLabel}</th>
+                        <th style="text-align: right;">${buckets.b2.pivotLabel}</th>
+                        <th style="text-align: right;">${buckets.b3.pivotLabel}</th>
+                        <th style="text-align: right;">${buckets.b4.pivotLabel}</th>
+                        <th style="text-align: right;">${buckets.b5.pivotLabel}</th>
+                        <th style="text-align: right;">${buckets.b6.pivotLabel}</th>
+                        <th style="text-align: right;">${buckets.b7.pivotLabel}</th>
+                        <th style="text-align: right; background-color: #991b1b !important;">Total Overdue</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        for (let i = 1; i < pivotArray.length; i++) {
+            const row = pivotArray[i];
+            const isSubtotal = String(row[0]).startsWith("Total ");
+            const isGrandTotal = row[0] === "Grand Total";
+
+            let trClass = "";
+            if (isSubtotal) trClass = "pivot-subtotal-row";
+            if (isGrandTotal) trClass = "pivot-grandtotal-row";
+
+            html += `<tr class="${trClass}">`;
+            html += `<td style="text-align: left; padding-left: ${isSubtotal || isGrandTotal ? '12px' : '20px'};">${row[0]}</td>`;
+            html += `<td style="text-align: left;">${row[1] || ''}</td>`;
+
+            for (let c = 2; c < row.length; c++) {
+                const val = row[c];
+                const formattedVal = (val !== null && val !== undefined && val !== 0) ? formatNumber(val) : '';
+                html += `<td style="text-align: right;">${formattedVal}</td>`;
+            }
+            
+            html += `</tr>`;
+        }
+
+        html += `</tbody></table>`;
+        document.getElementById('tableContainerPivot').innerHTML = html;
+    }
+
+    // --- ExcelJS Styling Export ---
+    async function exportToExcel() {
+        if (!processedExportData || processedExportData.length === 0) {
+            alert('ไม่มีข้อมูลสำหรับ Export');
+            return;
+        }
+
+        const keyDateVal = document.getElementById('keyDate').value;
+        const workbook = new ExcelJS.Workbook();
+
+        // 1. Tab AR_AG
+        const ws_ar_ag = workbook.addWorksheet("AR_AG");
+        const headersARAG = Object.keys(processedExportData[0]);
+        ws_ar_ag.addRow(headersARAG);
+
+        processedExportData.forEach(row => {
+            const rowValues = headersARAG.map(h => row[h]);
+            ws_ar_ag.addRow(rowValues);
+        });
+
+        // Style AR_AG
+        applyExcelStyles(ws_ar_ag, false);
+
+        // 2. Tab PIVOT
+        const ws_pivot = workbook.addWorksheet("PIVOT");
+        const pivotArray = generatePivotData(processedExportData, currentBucketsConfig);
+        pivotArray.forEach(row => ws_pivot.addRow(row));
+
+        // Style PIVOT
+        applyExcelStyles(ws_pivot, true);
+
+        // 3. Tab Original
+        const ws_original = workbook.addWorksheet("Original");
+        originalRawData.forEach(row => ws_original.addRow(row));
+
+        // Generate and Save File
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+        const groupVal = document.getElementById('grpAll').checked ? 'ALL' : getSelectedGroups().join('+');
+        saveAs(blob, `Customer_AR_Aging_Report_${groupVal}_${keyDateVal}.xlsx`);
+    }
+
+    function applyExcelStyles(ws, isPivot) {
+        const borderStyle = {
+            top: { style: 'thin', color: { argb: 'CBD5E1' } },
+            left: { style: 'thin', color: { argb: 'CBD5E1' } },
+            bottom: { style: 'thin', color: { argb: 'CBD5E1' } },
+            right: { style: 'thin', color: { argb: 'CBD5E1' } }
+        };
+
+        // Header Styling (Row 1 Fill Blue + White Font)
+        const headerRow = ws.getRow(1);
+        headerRow.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFF' } };
+        headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+        headerRow.height = 24;
+
+        headerRow.eachCell((cell) => {
+            // คอลัมน์ Invoice ใช้สีม่วงให้เด่น
+            const isInvoiceHeader = !isPivot && cell.value === 'Invoice';
+            cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: isInvoiceHeader ? '7C3AED' : '1E3A8A' }
+            };
+            cell.border = borderStyle;
+        });
+
+        // Rows Styling
+        ws.eachRow((row, rowNumber) => {
+            if (rowNumber === 1) return;
+
+            const firstCellVal = String(row.getCell(1).value || '');
+            const isSubtotal = firstCellVal.startsWith("Total ");
+            const isGrandTotal = firstCellVal === "Grand Total";
+
+            row.eachCell((cell, colNumber) => {
+                cell.border = borderStyle;
+                cell.font = { name: 'Calibri', size: 10 };
+
+                if (typeof cell.value === 'number') {
+                    cell.numFmt = '#,##0.00';
+                }
+
+                if (isSubtotal) {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'DBEAFE' } };
+                    cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'DC2626' } };
+                } else if (isGrandTotal) {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '1E293B' } };
+                    cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'DC2626' } };
+                }
+            });
+        });
+
+        // Auto-fit Column Widths
+        ws.columns.forEach(column => {
+            let maxLen = 12;
+            column.eachCell({ includeEmpty: true }, cell => {
+                const len = cell.value ? String(cell.value).length : 0;
+                if (len > maxLen) maxLen = len;
+            });
+            column.width = Math.min(maxLen + 4, 35);
+        });
+    }
+</script>
+
+</body>
+</html>
